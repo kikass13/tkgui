@@ -423,21 +423,24 @@ class GitRepoSelector(View):
 ################################################################################
 
 
+from threading import Thread, Lock
 
-class Window(View):
+
+class Window(View, Thread):
 	""" holder class for a window, manages the Tk() object and creates a default layout
 		which will be used (vertical layout in this case). It is used as an abstraction layer
 		for the user, so that nobody has to manage these references and/or so that the
 		user has a consistent idea about what a window is"""
-	def __init__(self, manager, key, threaded=False, size="100x100", bg="light gray"):
-		super(Window, self).__init__(key)
+	def __init__(self, manager, key, size="100x100", bg="light gray"):
+		#super(WindowT, self).__init__()
+		View.__init__(self, key)
+		Thread.__init__(self)
+		self.inited = False
+
 		self.manager = manager
-		#self.thread.start()
-		self.root = mtk.Tk()
-		self.root.protocol("WM_DELETE_WINDOW", self.close)
-		self.root.title(self.key)
-		self.root.geometry(size)
-		self.root.config(bg=bg)
+		self.key = key
+		self.size = size
+		self.bg = bg
 
 		### create first layout
 		self.layout = Vertical("layout", padding=5)
@@ -445,7 +448,27 @@ class Window(View):
 		self.ok = True
 		self.isClosing = False
 
-	def open(self):
+	def run(self):
+		while(self.ok):
+			if(self.inited):
+				time.sleep(0.01)
+				self.root.update()
+				self.root.update_idletasks()
+				self.onUpdate()
+			else:
+				self.init()
+		### do we want to destroy this? the thread is about to end so the window should disappear anyways?!?!?!
+		### possible memory leak???
+		self.destroy()
+
+	def init(self):
+		self.root = mtk.Tk()
+		self.root.protocol("WM_DELETE_WINDOW", self.closeEvent)
+		self.root.title(self.key)
+		self.root.geometry(self.size)
+		self.root.config(bg=self.bg)
+		self.inited = True
+		
 		self.layout = self.createViews(self.layout)
 		### apply window configs to layout!!!
 		self.layout.config(**self.configArgs) 
@@ -455,67 +478,52 @@ class Window(View):
 		### mainframe parent
 		self.tk = self.layout.makeView(self.root)
 
-	def update(self):
-		if(self.ok):
-			if(self.key == "Do some stuff ..."):
-				pass
-			else:
-				self.root.update()
-				self.root.update_idletasks()
-		### check my closing flag (toggled by the update function closeEvent [same thread])
-		if(self.isClosing): 
-			self.closeForRealz()
-
-	### i want to close so badly
+	### own internal close event trigger
+	def closeEvent(self):
+		self.close()
+	### function to close this window (will spin up the manager to do it)
 	def close(self):
-		self.isClosing = True
 		self.ok = False
-
-	### overrridable user event callback
-	def onClose(self):
-		pass
-
-	def closeForRealz(self):
-		self.onClose() ### notify user
-		self.manager.closeWindow(self)
-
-	def destroy(self):
-		self.root.destroy()
-
+		self.manager.onWindowClose(self)
 	### this view does not return its parent context, it IS the context
 	def getContext(self):
 		return self.root
+	def destroy(self):
+		self.root.quit()
+		self.root.destroy()
+
+	### overridable by user
+	def onUpdate(self): pass
+	def onClose(self): pass
+
 
 class WindowManager(object):
 	def __init__(self):
 		self.windows = []
 		self.ok = True
-		#self.mutex = Lock()
 
-	def start(self):
-		#tk.mainloop()
-		while(self.ok):
-			#time.sleep(0.05)
-			for window in self.windows:
-				window.update()
-		print("Window Manager done ...")
-		return
-		
 	def openWindow(self, window):
 		self.windows.append(window)
-		window.open()
+		window.start()
 
-	def closeWindow(self, window):
-		#print("Closed Window %s" % window.key)
+	#def closeWindow(self, window):
+	#	#print("Closed Window %s" % window.key)
+	#	self.windows.remove(window)
+	#	### notify user that this window is about to close
+	#	window.onClose()
+	#	### close the window by stopping the thread supporting it
+	#	window.stop()
+	#	self.ok = len(self.windows) != 0
+	
+	def onWindowClose(self, window):
 		self.windows.remove(window)
 		self.ok = len(self.windows) != 0
-		window.destroy()
-		del window
-		
-		### close window if others still exist
-		### else we are not ok and the manager will close the thread immeadiatley
-		### this is only for testing purposes, so that the window closes faster .. 
-		#if(self.ok): window.destroy()
+
+	def spin(self):
+		### wait for all windows to close
+		while(self.ok):
+			time.sleep(0.2)
+		print("All Windows closed, manager ended ...")
 
 
 ################################################################################

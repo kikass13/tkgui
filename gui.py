@@ -72,7 +72,6 @@ class UserInputWindow(GUI.Window):
 		deployUtilsWindow = DeployUtilsWindow(manager=self.manager, key="Do some stuff ...", size="250x400")
 		self.manager.openWindow(deployUtilsWindow)
 
-
 class DeployUtilsWindow(GUI.Window):
 	def __init__(self, **kwargs):
 		super(DeployUtilsWindow, self).__init__(**kwargs)
@@ -137,6 +136,7 @@ class DeployUtilsWindow(GUI.Window):
 	def taskDone(self, sender):
 		sender.button.config(bg="#d9d9d9")
 		sender.button.config(state="normal")
+	
 
 class Nick():
 	def __init__(self):
@@ -146,7 +146,7 @@ class Nick():
 		wm = GUI.WindowManager()
 		userInputWindow = UserInputWindow(manager=wm, key="Choose your stuff ...", size="600x500")
 		wm.openWindow(userInputWindow)
-		wm.start()
+		wm.spin()
 
 
 
