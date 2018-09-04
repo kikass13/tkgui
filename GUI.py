@@ -317,16 +317,17 @@ class FileDialogField(View):
 
 
 class OptionField(View):
-	def __init__(self, key, label, options=[], direction="horizontal", boxWidth=None, labelWidth=None):
+	def __init__(self, key, label, options=[], direction="horizontal", valueChangedCallback=None, boxWidth=None, labelWidth=None):
 		super(OptionField, self).__init__(key)
 		self.label = label
 		self.options = options
 		if(not self.options): 	### if list of options is empty, we have to have an option at all times
 			self.options.append(" ")
 		self.direction = direction
+		self.valueChangedCallback = valueChangedCallback
 		### preset values in comboBox
 		self.defaultEntry = options[0]
-		self.selectedValue = self.defaultEntry
+		#self.selectedValue = self.defaultEntry
 
 		### configure boxwidth for longest element in optionsList or set to given value
 		### or better not do that
@@ -335,6 +336,14 @@ class OptionField(View):
 		self.labelWidth = len(self.label)
 		if(labelWidth): self.labelWidth = labelWidth
 
+	def refresh(self, options):
+		# Reset var and delete all old options
+		import Tkinter as tk
+		self.variable.set(options[0])
+		self.optionMenu['menu'].delete(0, 'end')
+		# Insert list of new options (tk._setit hooks them up to var)
+		for o in options:
+			self.optionMenu['menu'].add_command(label=o, command=lambda value=o: (self.variable.set(value), self.valueChanged(value)) )
 
 	### Define gui for checked fields
 	def makeView(self, master):
@@ -343,9 +352,9 @@ class OptionField(View):
 		bg = convertToColorCode(master, bg)
 
 		l = mtk.Label(frame, text=self.label, width=self.labelWidth, anchor="w", bg=bg)
-		variable = mtk.StringVar(frame)
-		variable.set(self.defaultEntry)
-		self.optionMenu = mtk.OptionMenu(frame, variable, command=self.valueChanged, *self.options)
+		self.variable = mtk.StringVar(frame)
+		self.variable.set(self.defaultEntry)
+		self.optionMenu = mtk.OptionMenu(frame, self.variable, command=self.valueChanged, *self.options)
 		self.optionMenu.config(bg=bg, highlightthickness=0,  activebackground=colorscale(bg,0.95))#, activeforeground=colorscale(bg,1.5) )
 		if(self.boxWidth): self.optionMenu.config(width=self.boxWidth)
 
@@ -360,18 +369,28 @@ class OptionField(View):
 		return frame
 
 	def valueChanged(self, value):
-		self.selectedValue = value
+		if(self.valueChangedCallback):
+			self.valueChangedCallback(self, value)
+
 	def getValue(self):
-		return self.selectedValue
+		return self.variable.get()
 
 class GitRepoSelector(View):
-	def __init__(self, key, label, repositorys=[], branches=[], type=0):
+	def __init__(self, key, label, repoDict={}, type=0):
 		super(GitRepoSelector, self).__init__(key)
 		self.label = label
-		self.repositorys = repositorys
-		self.branches = branches
-		self.type=type
 
+		### define repos and branches from repoDict
+		self.repoDict = repoDict 
+
+		self.repositorys = self.repoDict.keys()
+		self.branches = self.repoDict.values()[0]
+
+		#for r, bl in repositorys.items():
+		#	self.repositorys.append(r)
+		#	self.branches.extend(bl)
+
+		self.type=type
 		self.REPOLABELSTR = "Repository: "
 		self.BRANCHLABELSTR = "Branch: "
 
@@ -391,8 +410,12 @@ class GitRepoSelector(View):
 		minBoxWidth = None
 		if(self.type==0): minBoxWidth = findLongestStrInLists([self.repositorys, self.branches])
 		else: minBoxWidth = 18
-		self.repo = OptionField(self.key+"_repo", self.REPOLABELSTR, self.repositorys, direction="horizontal", boxWidth=minBoxWidth, labelWidth=minLabelWidth)
-		self.branch = OptionField(self.key+"_branch", self.BRANCHLABELSTR, self.branches, direction="horizontal", boxWidth=minBoxWidth, labelWidth=minLabelWidth)
+		self.repo = OptionField(self.key+"_repo", self.REPOLABELSTR, self.repositorys, direction="horizontal", 
+								valueChangedCallback = self.onRepoChanged,
+								boxWidth=minBoxWidth, labelWidth=minLabelWidth)
+		self.branch = OptionField(self.key+"_branch", self.BRANCHLABELSTR, self.branches, direction="horizontal", 
+									valueChangedCallback = self.onBranchChanged,
+									boxWidth=minBoxWidth, labelWidth=minLabelWidth)
 
 		### configurate these views
 		l.config(anchor='w', font='Helvetica 10 bold', bg=headerbg)
@@ -412,6 +435,20 @@ class GitRepoSelector(View):
 			frame1.pack(side=mtk.TOP, padx=5, pady=5, anchor="w", fill=mtk.X)
 			frame2.pack(side=mtk.BOTTOM, padx=5, pady=5,anchor="w", fill=mtk.X)
 		return frame
+
+	def reloadContents(self):
+		self.repositorys = [r for r in self.repoDict.keys()]
+
+	def onRepoChanged(self, sender, newVal):
+		#print("repo changed ...")
+		#print("setting new options ...")
+		branches = self.repoDict[newVal]
+		self.branch.refresh(branches)
+
+	def onBranchChanged(self, sender, newVal):
+		#print("Branch Changed to %s" % newVal) 
+		pass
+
 	def getValue(self):
 		repo = self.repo.getValue()
 		branch = self.branch.getValue()
